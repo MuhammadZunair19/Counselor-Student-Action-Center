@@ -1,26 +1,30 @@
 import { Router } from "express";
+import { AppError } from "../errors/AppError.js";
+import { asyncHandler } from "../middleware/asyncHandler.js";
 import { isValidTaskStatus, updateTaskStatus } from "../services/tasks.js";
 
 const router = Router();
 
-router.patch("/:taskId/status", (req, res) => {
-    const { status } = req.body;
+router.patch(
+    "/:taskId/status",
+    asyncHandler(async (req, res) => {
+        const { status } = req.body;
 
-    if (!isValidTaskStatus(status)) {
-        res.status(400).json({
-            error: "Invalid status. Must be one of: todo, in_progress, completed",
-        });
-        return;
-    }
+        if (!isValidTaskStatus(status)) {
+            throw new AppError(
+                400,
+                "Invalid status. Must be one of: todo, in_progress, completed",
+            );
+        }
 
-    const updatedTask = updateTaskStatus(req.params.taskId, status);
+        const updatedTask = updateTaskStatus(req.params.taskId, status);
 
-    if (!updatedTask) {
-        res.status(404).json({ error: "Task not found" });
-        return;
-    }
+        if (!updatedTask) {
+            throw new AppError(404, "Task not found");
+        }
 
-    res.json(updatedTask);
-});
+        res.json(updatedTask);
+    }),
+);
 
 export default router;
