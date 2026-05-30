@@ -1,3 +1,5 @@
+import type { Message, Student, Task } from "../types/index.js";
+
 export const students = [
     {
         id: "stu_001",
@@ -26,7 +28,7 @@ export const students = [
         counselorId: "csl_001",
         enrollmentStatus: "at_risk",
     },
-];
+] satisfies Student[];
 
 export const tasks = [
     {
@@ -172,7 +174,7 @@ export const tasks = [
         createdAt: "2026-05-03T09:00:00Z",
         updatedAt: "2026-05-10T16:00:00Z",
     },
-];
+] satisfies Task[];
 
 export const messages = [
     {
@@ -247,4 +249,4 @@ export const messages = [
         read: true,
         receivedAt: "2026-05-21T08:00:00Z",
     },
-];
+] satisfies Message[];
