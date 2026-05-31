@@ -112,11 +112,17 @@ Returns everything needed for the counselor action center view.
 | `unreadMessageCount` | number   | Count of messages where `read === false` |
 | `urgencyLevel`       | string   | One of: `critical`, `high`, `medium`, `low` |
 
+**Response headers**
+
+| Header | Description |
+|--------|-------------|
+| `X-Request-Id` | Unique ID per request (echoed from client header if provided) |
+
 **Errors**
 
 | Status | Body | When |
 |--------|------|------|
-| `404`  | `{ "error": "Student not found" }` | Unknown student ID |
+| `404`  | `{ "error": "Student not found", "requestId": "..." }` | Unknown student ID |
 
 ---
 
@@ -150,8 +156,9 @@ Returns the updated task object (same shape as items in `tasks` above), with `up
 
 | Status | Body | When |
 |--------|------|------|
-| `400`  | `{ "error": "Invalid status. Must be one of: todo, in_progress, completed" }` | Missing or invalid `status` |
-| `404`  | `{ "error": "Task not found" }` | Unknown task ID |
+| `400`  | `{ "error": "Invalid status...", "requestId": "..." }` | Missing or invalid `status` |
+| `404`  | `{ "error": "Task not found", "requestId": "..." }` | Unknown task ID |
+| `500`  | `{ "error": "Internal server error", "requestId": "..." }` | Unhandled server error |
 
 ---
 
@@ -182,9 +189,11 @@ The backend follows a simple layered structure:
 
 ```
 src/
-├── index.ts              # Express app, CORS, route mounting
+├── app.ts                # Express app factory (used by server + tests)
+├── index.ts              # Server entrypoint
 ├── store.ts              # In-memory copies of mock data (tasks are mutable)
 ├── data/mock-data.ts     # Exact mock dataset (students, tasks, messages)
+├── middleware/           # requestId, requestLogger, errorHandler
 ├── routes/               # HTTP handlers (thin)
 │   ├── students.ts       # GET /students/:id/action-center
 │   └── tasks.ts          # PATCH /tasks/:taskId/status
@@ -237,6 +246,52 @@ src/
 | Urgency / priority badges | Overall urgency + per-task priority + enrollment |
 | Update task status | Status dropdown per task |
 | Loading / error states | `LoadingState`, `ErrorState`, update error banner |
+
+---
+
+## Task 2: Production readiness (branch `task-2-production-readiness`)
+
+This branch adds observability, structured errors, automated tests, and CI.
+
+### What was added
+
+| Area | Change |
+|------|--------|
+| Request logging | JSON logs per request: `requestId`, method, path, status, `durationMs` |
+| Error middleware | Central handler; all errors include `requestId`; `X-Request-Id` on every response |
+| Backend tests | Integration tests (`supertest` + Vitest) in `backend/tests/integration/` |
+| Frontend tests | Component test for `StudentProfile` (Vitest + Testing Library) |
+| CI | GitHub Actions workflow runs backend + frontend tests on push |
+
+### Running tests
+
+```bash
+# Backend
+cd backend && npm install && npm test
+
+# Frontend
+cd frontend && npm install && npm test
+```
+
+### CI / test output
+
+- **CI workflow:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — runs on push to `master` and `task-2-production-readiness`
+- **Sample local test log:** [`docs/ci-test-output.md`](docs/ci-test-output.md) (paste of `npm test` in both packages)
+- After pushing, open the **Actions** tab on GitHub for the run log (satisfies “screenshot or CI run log”)
+
+### Performance decisions & tradeoffs
+
+| Decision | Rationale | Tradeoff |
+|----------|-----------|----------|
+| **In-memory store** | Fast reads/writes for demo scale; no DB setup | Data resets on restart; not horizontally scalable |
+| **Single refetch after task PATCH** | Keeps `urgencyLevel` and counts correct from server | Extra round-trip vs optimistic UI only |
+| **Server-side urgency** | One source of truth; frontend stays thin | Slightly more backend CPU per action-center request |
+| **JSON request logging** | Easy to grep/ship to log aggregators later | Console-only for now (no log rotation / levels config) |
+| **`resetStores()` in tests** | Deterministic integration tests without a test DB | Tests must not run in parallel against shared state (`fileParallelism: false`) |
+| **No pagination on tasks** | Mock data has few tasks per student | Would need paging if lists grow in production |
+| **Vite dev proxy** | Simple local DX | Production needs explicit API URL or reverse proxy |
+
+**If scaling further:** add a real database, cache action-center responses (short TTL), structured logger (pino), rate limiting, and optimistic updates with background revalidation on the frontend.
 
 ---
 
